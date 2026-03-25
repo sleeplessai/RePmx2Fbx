@@ -53,3 +53,52 @@ The project now uses a CMake-based system with presets for different environment
     *   `vs2026-slnx`: Modern VS 2026 XML-based solution format.
 *   **Target**: 64-bit (x64) only.
 *   **Runtime**: Static Runtime Library (/MT).
+
+## 5. AI-Assisted Conversion (Skill)
+
+This project includes a skill for AI assistants to convert MMD models automatically. The skill is installed locally in `.agents/skills/mmd-to-fbx/`.
+
+### Requirements
+
+- **PowerShell 5.1+** (Windows) or **PowerShell 7+** (cross-platform)
+- **Pmx2Fbx.exe** - Must be built from source or downloaded from releases
+
+### Installation
+
+The skill is already included in this repository. No additional setup required - AI assistants will automatically detect and use it.
+
+### Usage with AI
+
+When working with an AI assistant, you can request conversions using simple prompts:
+
+**In-Place Conversion (keep both PMX and FBX):**
+> "Convert all MMD models in [folder] to FBX, keep in place"
+
+**Separate Folder Conversion:**
+> "Convert MMD zip files in [folder] to FBX, create _fbx folders"
+
+**Full Example Prompts:**
+```
+# Convert a single zip file
+"Convert C:\Downloads\Miku.zip to FBX, keep files in place"
+
+# Convert all files in a directory
+"Convert all MMD models in C:\Users\tomo\Desktop\Models to FBX"
+
+# Force rebuild if needed
+"Re-convert all models in C:\Models, rebuild from source first"
+```
+
+### How It Works
+
+1. **Input**: Accepts either a `.pmx` folder or `.zip` file
+2. **Extraction**: Uses PowerShell's `Expand-Archive` to extract zip files to folders named after the zip file
+3. **Nested Zips**: Automatically extracts nested zip files to their own folders
+4. **Conversion**: Runs `Pmx2Fbx.exe` on all `.pmx` files found
+5. **Output**: Creates either in-place `.pmx.fbx` files or separate `_fbx` folders
+
+### Skill Files
+
+*   `.agents/skills/mmd-to-fbx/SKILL.md` - Skill documentation
+*   `.agents/skills/mmd-to-fbx/bin/Pmx2Fbx.exe` - Bundled executable
+*   `.agents/skills/mmd-to-fbx/scripts/Convert-MmdToFbx.ps1` - Reusable conversion script

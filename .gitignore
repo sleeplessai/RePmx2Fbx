@@ -1,12 +1,14 @@
 # Build directories
 build/
-bin/
 obj/
 out/
 .vs/
 x64/
 Debug/
 Release/
+
+# Skill executables
+.agents/skills/mmd-to-fbx/bin/
 
 # CMake artifacts
 CMakeCache.txt
