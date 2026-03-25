@@ -29,6 +29,11 @@ public:
 
 		void SetBindPose(FbxNode * pNode, const FbxAMatrix & mat);
 
+		// Morph/BlendShape support
+		void InitBlendShape(int morphCount);
+		void AddMorphTarget(const char* morphName, int vertexIndex, const Vector3& offset);
+		void AddUVMorphTarget(const char* morphName, int vertexIndex, const Vector4& offset);
+
 	private:
 		FbxHelper					*m_pOwner;
 		FbxNode						*m_pNode;
@@ -39,6 +44,8 @@ public:
 		FbxGeometryElementMaterial	*m_pMaterialElement;
 
 		FbxSkin						*m_pSkin;
+		FbxBlendShape				*m_pBlendShape;
+		FbxGeometryElementUV		*m_pUVMorphElement;
 
 		std::map<FbxNode*, FbxAMatrix>	m_BindPoses;
 	};

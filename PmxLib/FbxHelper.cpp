@@ -401,6 +401,8 @@ FbxHelper::Shape::~Shape()
 
 FbxHelper::Shape::Shape(FbxHelper * owner, const char * strName)
 	: m_pOwner(owner)
+	, m_pBlendShape(nullptr)
+	, m_pUVMorphElement(nullptr)
 {
 	m_pNode = FbxNode::Create(m_pOwner->m_pScene, strName);
 	m_pMesh = FbxMesh::Create(m_pOwner->m_pScene, strName);
@@ -466,4 +468,67 @@ void FbxHelper::Shape::AddMaterial(FbxSurfaceMaterial * pMaterial)
 void FbxHelper::Shape::SetBindPose(FbxNode * pNode, const FbxAMatrix & mat)
 {
 	m_BindPoses[pNode] = mat;
+}
+
+void FbxHelper::Shape::InitBlendShape(int morphCount)
+{
+	if (m_pBlendShape == nullptr)
+	{
+		m_pBlendShape = FbxBlendShape::Create(m_pOwner->m_pScene, "BlendShape");
+		m_pMesh->AddDeformer(m_pBlendShape);
+	}
+}
+
+void FbxHelper::Shape::AddMorphTarget(const char* morphName, int vertexIndex, const Vector3& offset)
+{
+	if (!m_pBlendShape)
+	{
+		InitBlendShape(0);
+	}
+
+	std::string latinName;
+	if (g_bLatin)
+	{
+		ConvNameToLatin(morphName, latinName);
+		morphName = latinName.c_str();
+	}
+
+	FbxBlendShapeChannel* channel = nullptr;
+	for (int i = 0; i < m_pBlendShape->GetBlendShapeChannelCount(); ++i)
+	{
+		if (strcmp(m_pBlendShape->GetBlendShapeChannel(i)->GetName(), morphName) == 0)
+		{
+			channel = m_pBlendShape->GetBlendShapeChannel(i);
+			break;
+		}
+	}
+
+	if (!channel)
+	{
+		channel = FbxBlendShapeChannel::Create(m_pOwner->m_pScene, morphName);
+		m_pBlendShape->AddBlendShapeChannel(channel);
+	}
+
+	FbxShape* shape = FbxShape::Create(m_pOwner->m_pScene, morphName);
+	shape->InitControlPoints(1);
+	shape->SetControlPointAt(FbxVector4(offset.X, offset.Y, offset.Z), 0);
+
+	FbxGeometryElementNormal* normalElem = shape->CreateElementNormal();
+	normalElem->SetMappingMode(FbxGeometryElement::eByControlPoint);
+	normalElem->SetReferenceMode(FbxGeometryElement::eDirect);
+	normalElem->GetDirectArray().Add(FbxVector4(0, 0, 1));
+
+	channel->AddTargetShape(shape, 100.0);
+}
+
+void FbxHelper::Shape::AddUVMorphTarget(const char* morphName, int vertexIndex, const Vector4& offset)
+{
+	if (!m_pUVMorphElement)
+	{
+		m_pUVMorphElement = m_pMesh->CreateElementUV("UVMorph");
+		m_pUVMorphElement->SetMappingMode(FbxGeometryElement::eByControlPoint);
+		m_pUVMorphElement->SetReferenceMode(FbxGeometryElement::eDirect);
+	}
+
+	m_pUVMorphElement->GetDirectArray().Add(FbxVector2(offset.X, -offset.Y));
 }

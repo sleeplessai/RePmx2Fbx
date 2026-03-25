@@ -126,6 +126,34 @@ static void SavePmxToFbx(PmxReader & pmx, const char * strFileName)
 			}
 			++count;
 		}
+
+		// Export morph targets (blend shapes)
+		if (!pmx.MorphList.empty())
+		{
+			shp->InitBlendShape(static_cast<int>(pmx.MorphList.size()));
+
+			for (const auto& morph : pmx.MorphList)
+			{
+				// Vertex morph (facial expressions)
+				if (morph.Kind == PmxReader::OffsetKind::Vertex)
+				{
+					for (const auto& morphData : morph.OffsetList)
+					{
+						auto* vertexMorph = static_cast<PmxReader::PmxVertexMorph*>(morphData.get());
+						shp->AddMorphTarget(morph.Name.c_str(), vertexMorph->Index, vertexMorph->Offset);
+					}
+				}
+				// UV morph (eyebrow movement, etc.)
+				else if (morph.Kind == PmxReader::OffsetKind::UV)
+				{
+					for (const auto& morphData : morph.OffsetList)
+					{
+						auto* uvMorph = static_cast<PmxReader::PmxUVMorph*>(morphData.get());
+						shp->AddUVMorphTarget(morph.Name.c_str(), uvMorph->Index, uvMorph->Offset);
+					}
+				}
+			}
+		}
 	}
 
 	fbx.SaveScene(strFileName);
