@@ -53,3 +53,49 @@ The project now uses a CMake-based system with presets for different environment
     *   `vs2026-slnx`: Modern VS 2026 XML-based solution format.
 *   **Target**: 64-bit (x64) only.
 *   **Runtime**: Static Runtime Library (/MT).
+
+## 5. AI-Assisted Conversion (Skill)
+
+This project includes a skill for AI assistants to convert MMD models automatically. The skill is installed locally in `.agents/skills/mmd-to-fbx/`.
+
+### Installation
+
+The skill is already included in this repository. To make it fully self-contained, copy `Pmx2Fbx.exe` into the skill's local binary directory:
+
+```
+.agents/skills/mmd-to-fbx/bin/Pmx2Fbx.exe
+```
+
+> **Note**: The `bin/` directory is excluded from version control via `.gitignore`. You must manually populate it after cloning, either by building from source (`cmake --preset ninja && cmake --build --preset ninja`) or downloading a release binary.
+
+### Requirements
+
+- **Pmx2Fbx.exe** placed in `.agents/skills/mmd-to-fbx/bin/`
+- For PowerShell invocation: **PowerShell 5.1+** / **PowerShell 7+**
+- For Python invocation: **Python 3.8+** (no additional packages required)
+
+### Usage with AI
+
+When working with an AI assistant, you can request conversions using simple prompts:
+
+```
+# Convert all PMX models found recursively in a folder
+"Convert all MMD models in C:\Users\tomo\Desktop\MmdRepo to FBX"
+
+# Convert a single PMX file directly
+"Convert C:\Models\Miku\Miku.pmx to FBX"
+```
+
+### How It Works
+
+1. **Input**: Accepts either a directory path (recursive scan) or a direct `.pmx` file path.
+2. **Discovery**: Recursively finds all `.pmx` files under the given directory.
+3. **Conversion**: Invokes the locally bundled `bin/Pmx2Fbx.exe` on each discovered model.
+4. **Output**: Creates an in-place `.pmx.fbx` file alongside the source, preserving the original textures and materials.
+
+### Skill Files
+
+*   `.agents/skills/mmd-to-fbx/SKILL.md` - Skill documentation and usage instructions
+*   `.agents/skills/mmd-to-fbx/bin/Pmx2Fbx.exe` - Locally bundled executable (not tracked in git)
+*   `.agents/skills/mmd-to-fbx/scripts/Convert-MmdToFbx.ps1` - PowerShell invocation script
+*   `.agents/skills/mmd-to-fbx/scripts/convert_mmd_to_fbx.py` - Python invocation script
