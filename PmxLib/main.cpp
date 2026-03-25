@@ -1,20 +1,23 @@
-#include <vld.h>
-#include <stdio.h>
+#include <iostream>
+#include <fstream>
+#include <vector>
+#include <filesystem>
 #include <windows.h>
 #include "PmxReader.h"
 #include "FbxHelper.h"
+
+namespace fs = std::filesystem;
 
 static void SavePmxToFbx(PmxReader & pmx, const char * strFileName)
 {
 	FbxHelper fbx;
 
-	FbxHelper::Shape * shp = fbx.BeginShape(pmx.ModelName.c_str());
+	auto shp = fbx.BeginShape(pmx.ModelName.c_str());
 	{
-		// 写入顶点
-		shp->InitPositionSize(pmx.VertexList.size());
+		shp->InitPositionSize(static_cast<int>(pmx.VertexList.size()));
 
 		int count = 0;
-		for (auto & item : pmx.VertexList)
+		for (const auto & item : pmx.VertexList)
 		{
 			shp->SetPositionAt(item.Position, count);
 			shp->AddNormal(item.Normal);
@@ -22,33 +25,30 @@ static void SavePmxToFbx(PmxReader & pmx, const char * strFileName)
 			++count;
 		}
 
-		// 遍历材质组
 		int currFace = 0;
 		for (size_t matID = 0, szMat = pmx.MaterialList.size(); matID < szMat; ++matID)
 		{
-			// 写入材质
-			auto & currMat = pmx.MaterialList[matID];
-			FbxSurfacePhong * pFbxMat = fbx.NewPhong(currMat.Name.c_str());
+			const auto & currMat = pmx.MaterialList[matID];
+			auto pFbxMat = fbx.NewPhong(currMat.Name.c_str());
 			pFbxMat->Diffuse.Set(FbxDouble3(currMat.Diffuse.X, currMat.Diffuse.Y, currMat.Diffuse.Z));
 			pFbxMat->Ambient.Set(FbxDouble3(currMat.Ambient.X, currMat.Ambient.Y, currMat.Ambient.Z));
 			pFbxMat->Specular.Set(FbxDouble3(currMat.Specular.X, currMat.Specular.Y, currMat.Specular.Z));
 			pFbxMat->SpecularFactor = currMat.Power;
-			// 设置纹理
-			FbxFileTexture * pFbxTex = fbx.NewTexture("Diffuse", currMat.Tex.c_str());
+
+			auto pFbxTex = fbx.NewTexture("Diffuse", currMat.Tex.c_str());
 			pFbxMat->Diffuse.ConnectSrcObject(pFbxTex);
-			// 设置透明通道
-			FbxFileTexture * pFbxOpacityTex = fbx.NewTexture("Opacity", currMat.Tex.c_str());
+
+			auto pFbxOpacityTex = fbx.NewTexture("Opacity", currMat.Tex.c_str());
 			pFbxOpacityTex->SetAlphaSource(FbxTexture::eBlack);
 			pFbxMat->TransparentColor.ConnectSrcObject(pFbxOpacityTex);
 			shp->AddMaterial(pFbxMat);
 
-			// 写入当前材质对应的面
 			count = 0;
 			for (int endFace = currFace + currMat.FaceCount; currFace < endFace; ++currFace)
 			{
 				if (count == 0)
 				{
-					shp->BeginFace(matID);
+					shp->BeginFace(static_cast<int>(matID));
 				}
 
 				shp->AddIndex(pmx.FaceList[currFace]);
@@ -59,21 +59,22 @@ static void SavePmxToFbx(PmxReader & pmx, const char * strFileName)
 					count = 0;
 				}
 				else
+				{
 					++count;
+				}
 			}
 		}
 
-		// 写入骨架信息
-		std::vector<FbxHelper::BoneInfo> fbxBoneList;
-		fbxBoneList.resize(pmx.BoneList.size());
+		std::vector<FbxHelper::BoneInfo> fbxBoneList(pmx.BoneList.size());
 		count = 0;
-		for (auto & currBone : pmx.BoneList)
+		for (const auto & currBone : pmx.BoneList)
 		{
-			fbx.NewBoneNode(currBone.Name.c_str(), shp, fbxBoneList[count]);
+			fbx.NewBoneNode(currBone.Name.c_str(), shp.get(), fbxBoneList[count]);
 			++count;
 		}
+
 		size_t boneID = 0;
-		for (auto & currBone : pmx.BoneList)
+		for (const auto & currBone : pmx.BoneList)
 		{
 			if (currBone.Parent < 0)
 			{
@@ -87,11 +88,11 @@ static void SavePmxToFbx(PmxReader & pmx, const char * strFileName)
 			}
 			++boneID;
 		}
-		// 写入骨骼初始位置
+
 		count = 0;
 		for (auto & item : fbxBoneList)
 		{
-			auto & currBone = pmx.BoneList[count];
+			const auto & currBone = pmx.BoneList[count];
 			++count;
 
 			FbxAMatrix matLocal;
@@ -103,25 +104,21 @@ static void SavePmxToFbx(PmxReader & pmx, const char * strFileName)
 			item.m_pNode->LclTranslation.Set(FbxDouble3(matLocal.GetT()));
 			item.m_pNode->LclRotation.Set(FbxDouble3(matLocal.GetR()));
 
-#if 0
-			auto & matWorld = item.m_pNode->EvaluateGlobalTransform();
-#else
 			FbxAMatrix matWorld;
 			matWorld.SetRow(0, FbxVector4(currBone.WorldMatrix._11, currBone.WorldMatrix._12, currBone.WorldMatrix._13, currBone.WorldMatrix._14));
 			matWorld.SetRow(1, FbxVector4(currBone.WorldMatrix._21, currBone.WorldMatrix._22, currBone.WorldMatrix._23, currBone.WorldMatrix._24));
 			matWorld.SetRow(2, FbxVector4(currBone.WorldMatrix._31, currBone.WorldMatrix._32, currBone.WorldMatrix._33, currBone.WorldMatrix._34));
 			matWorld.SetRow(3, FbxVector4(currBone.WorldMatrix._41, currBone.WorldMatrix._42, currBone.WorldMatrix._43, currBone.WorldMatrix._44));
-#endif
+
 			item.m_pCluster->SetTransformLinkMatrix(matWorld);
 		}
 
-		// 写入权重
 		count = 0;
-		for (auto & item : pmx.VertexList)
+		for (const auto & item : pmx.VertexList)
 		{
 			for (int i = 0; i < 4; ++i)
 			{
-				auto & currWeight = item.Weight[i];
+				const auto & currWeight = item.Weight[i];
 				if (currWeight.IsValid())
 				{
 					fbxBoneList[currWeight.Bone].m_pCluster->AddControlPointIndex(count, currWeight.Value);
@@ -130,58 +127,70 @@ static void SavePmxToFbx(PmxReader & pmx, const char * strFileName)
 			++count;
 		}
 	}
-	fbx.EndShape(shp);
 
 	fbx.SaveScene(strFileName);
 }
 
-//////////////////////////////////////////////////////////////////////////
-static void * ReadFile(const wchar_t * strFileName, size_t & szFileLen)
+static std::vector<char> ReadFile(const wchar_t* strFileName)
 {
-	void * pResult = 0;
-	FILE * fp = 0;
-	_wfopen_s(&fp, strFileName, L"rb");
-	if (fp)
+	std::ifstream file(strFileName, std::ios::binary | std::ios::ate);
+	if (!file.is_open())
 	{
-		fseek(fp, 0, SEEK_END);
-		szFileLen = ftell(fp);
-		fseek(fp, 0, SEEK_SET);
-
-		pResult = malloc(szFileLen);
-		fread(pResult, szFileLen, 1, fp);
-
-		fclose(fp);
+		return {};
 	}
-	return pResult;
+
+	const auto size = file.tellg();
+	file.seekg(0, std::ios::beg);
+
+	std::vector<char> buffer(static_cast<size_t>(size));
+	if (file.read(buffer.data(), size))
+	{
+		return buffer;
+	}
+
+	return {};
 }
 
-int wmain(int argc, const wchar_t ** argv)
+static std::wstring Utf8ToWstring(const std::string& str)
+{
+	if (str.empty()) return {};
+	int size_needed = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.size()), nullptr, 0);
+	std::wstring wstr(size_needed, 0);
+	MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.size()), &wstr[0], size_needed);
+	return wstr;
+}
+
+static std::string WstringToUtf8(const std::wstring& wstr)
+{
+	if (wstr.empty()) return {};
+	int size_needed = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.size()), nullptr, 0, nullptr, nullptr);
+	std::string str(size_needed, 0);
+	WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.size()), &str[0], size_needed, nullptr, nullptr);
+	return str;
+}
+
+int wmain(int argc, const wchar_t** argv)
 {
 	if (argc == 2)
 	{
-		const wchar_t * strInput = argv[1];
-
-		std::wstring strInputPath;
-		for (int i = wcslen(strInput) - 1; i >= 0; --i)
+		fs::path inputPath(argv[1]);
+		if (fs::exists(inputPath))
 		{
-			if (strInput[i] == L'\\')
+			if (inputPath.has_parent_path())
 			{
-				strInputPath.assign(strInput, strInput + i);
-				SetCurrentDirectoryW(strInputPath.c_str());
-				break;
+				fs::current_path(inputPath.parent_path());
 			}
-		}
 
-		size_t flen = 0;
-		void * pBuf = ReadFile(strInput, flen);
-		if (pBuf)
-		{
-			PmxReader reader(pBuf, flen);
-			free(pBuf);
+			fs::path fileNameOnly = inputPath.filename();
+			auto buffer = ReadFile(fileNameOnly.c_str());
 
-			std::string strFileName;
-			Platform_Utf16To8(strInput, strFileName);
-			SavePmxToFbx(reader, (strFileName + ".fbx").c_str());
+			if (!buffer.empty())
+			{
+				PmxReader reader(buffer.data(), buffer.size());
+
+				std::wstring outputPath = fileNameOnly.wstring() + L".fbx";
+				SavePmxToFbx(reader, WstringToUtf8(outputPath).c_str());
+			}
 		}
 	}
 	return 0;

@@ -198,9 +198,7 @@ public:
 
 		static inline std::string ToString(int val)
 		{
-			char buf[2 * _MAX_INT_DIG];
-			sprintf_s(buf, sizeof(buf), "%d", val);
-			return std::string(buf);
+			return std::to_string(val);
 		}
 
 		static std::string GetToonName(int n)
@@ -578,7 +576,7 @@ public:
 		std::string					Name, NameE;
 		int							Panel;
 		OffsetKind::Type			Kind;
-		std::vector<PmxBaseMorph*>	OffsetList;
+		std::vector<std::unique_ptr<PmxBaseMorph>>	OffsetList;
 
 		PmxMorph()
 		{
@@ -586,13 +584,11 @@ public:
 			Kind = OffsetKind::Vertex;
 		}
 
-		~PmxMorph()
-		{
-			for (auto & item : OffsetList)
-			{
-				delete item;
-			}
-		}
+		~PmxMorph() = default;
+		PmxMorph(const PmxMorph&) = delete;
+		PmxMorph& operator=(const PmxMorph&) = delete;
+		PmxMorph(PmxMorph&&) = default;
+		PmxMorph& operator=(PmxMorph&&) = default;
 
 		void ReadMorph(BinReader & reader, PmxReader * owner)
 		{
@@ -609,23 +605,23 @@ public:
 				case OffsetKind::Group:
 				case OffsetKind::Flip:
 				{
-					PmxGroupMorph * pMorph = new PmxGroupMorph;
+					auto pMorph = std::make_unique<PmxGroupMorph>();
 					pMorph->Read(reader, owner);
-					OffsetList.push_back(pMorph);
+					OffsetList.push_back(std::move(pMorph));
 					break;
 				}
 				case OffsetKind::Vertex:
 				{
-					PmxVertexMorph * pMorph = new PmxVertexMorph;
+					auto pMorph = std::make_unique<PmxVertexMorph>();
 					pMorph->Read(reader, owner);
-					OffsetList.push_back(pMorph);
+					OffsetList.push_back(std::move(pMorph));
 					break;
 				}
 				case OffsetKind::Bone:
 				{
-					PmxBoneMorph * pMorph = new PmxBoneMorph;
+					auto pMorph = std::make_unique<PmxBoneMorph>();
 					pMorph->Read(reader, owner);
-					OffsetList.push_back(pMorph);
+					OffsetList.push_back(std::move(pMorph));
 					break;
 				}
 				case OffsetKind::UV:
@@ -634,23 +630,23 @@ public:
 				case OffsetKind::UVA3:
 				case OffsetKind::UVA4:
 				{
-					PmxUVMorph * pMorph = new PmxUVMorph;
+					auto pMorph = std::make_unique<PmxUVMorph>();
 					pMorph->Read(reader, owner);
-					OffsetList.push_back(pMorph);
+					OffsetList.push_back(std::move(pMorph));
 					break;
 				}
 				case OffsetKind::Material:
 				{
-					PmxMaterialMorph * pMorph = new PmxMaterialMorph;
+					auto pMorph = std::make_unique<PmxMaterialMorph>();
 					pMorph->Read(reader, owner);
-					OffsetList.push_back(pMorph);
+					OffsetList.push_back(std::move(pMorph));
 					break;
 				}
 				case OffsetKind::Impulse:
 				{
-					PmxImpulseMorph * pMorph = new PmxImpulseMorph;
+					auto pMorph = std::make_unique<PmxImpulseMorph>();
 					pMorph->Read(reader, owner);
-					OffsetList.push_back(pMorph);
+					OffsetList.push_back(std::move(pMorph));
 					break;
 				}
 				}
@@ -1084,7 +1080,7 @@ private:
 		{
 			if (strMagic != PmxKey)
 			{
-				throw std::wstring(L"ÎÄ¼þÍ·´íÎó");
+				throw std::wstring(L"ï¿½Ä¼ï¿½Í·ï¿½ï¿½ï¿½ï¿½");
 			}
 
 			Ver = m_Reader.Read<float>();
@@ -1092,7 +1088,7 @@ private:
 
 		if (Ver > 2.1f)
 		{
-			throw std::wstring(L"²»Ö§³Ö´óÓÚ 2.1 °æ±¾µÄÎÄ¼þ");
+			throw std::wstring(L"ï¿½ï¿½Ö§ï¿½Ö´ï¿½ï¿½ï¿½ 2.1 ï¿½æ±¾ï¿½ï¿½ï¿½Ä¼ï¿½");
 		}
 
 		ReadElementFormat();
@@ -1266,7 +1262,7 @@ private:
 	void ReadNodeInfo()
 	{
 		static std::string s_Exp;
-		static bool s_tmp = Platform_Utf16To8(L"±íÇé", s_Exp).empty();
+		static bool s_tmp = Platform_Utf16To8(L"ï¿½ï¿½ï¿½ï¿½", s_Exp).empty();
 
 		int num = ReadElement_Int32(m_Reader, 4, true);
 

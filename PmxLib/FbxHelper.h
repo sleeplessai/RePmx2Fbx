@@ -1,8 +1,8 @@
-
 #ifndef __FbxHelper_h__
 #define __FbxHelper_h__
 
 #include <map>
+#include <memory>
 #include <fbxsdk.h>
 #include "MathVector.h"
 
@@ -14,6 +14,7 @@ public:
 		friend class FbxHelper;
 	public:
 		Shape(FbxHelper * owner, const char * strName);
+		~Shape();
 
 		void InitPositionSize(int count);
 		void SetPositionAt(const Vector3 & pos, int idx);
@@ -44,22 +45,26 @@ public:
 
 	struct BoneInfo
 	{
-		FbxNode		*m_pNode;
-		FbxSkeleton	*m_pSkeleton;
-		FbxCluster	*m_pCluster;
+		FbxNode		*m_pNode = nullptr;
+		FbxSkeleton	*m_pSkeleton = nullptr;
+		FbxCluster	*m_pCluster = nullptr;
 	};
 
 public:
 	FbxHelper();
 	~FbxHelper();
 
+	// Delete copy constructor and assignment operator for RAII safety
+	FbxHelper(const FbxHelper &) = delete;
+	FbxHelper & operator=(const FbxHelper &) = delete;
+
 	void SetInfo();
 	bool SaveScene(const char * pFileName, bool pEmbedMedia = false, int pFileFormat = -1);
 
 	void AddNodeToRoot(FbxNode * pNode);
 
-	Shape * BeginShape(const char * strName);
-	void EndShape(Shape * pShape);
+	std::unique_ptr<Shape> BeginShape(const char * strName);
+	// EndShape is no longer needed as a public method due to unique_ptr RAII
 
 	FbxSurfacePhong * NewPhong(const char * strMatName);
 	FbxFileTexture * NewTexture(const char * strName, const char * strFileName);

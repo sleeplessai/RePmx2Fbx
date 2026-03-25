@@ -1,9 +1,14 @@
 
 #include <string>
+#include <sstream>
+#include <iomanip>
+#include <format>
+#include <filesystem>
 #include "FbxHelper.h"
 #include "Utils.h"
 #include <windows.h>
-#include <shellapi.h>
+
+namespace fs = std::filesystem;
 
 #ifdef IOS_REF
 #undef  IOS_REF
@@ -14,22 +19,83 @@
 
 bool g_bLatin = true;
 
-static void ConvNameToLatin(const char * strName, std::string & strOut)
+static std::string WstringToUtf8(const std::wstring& wstr)
 {
-	int curr = 0;
-	uint8_t ch;
-	char strBuf[8];
-	while ((ch = strName[curr]) != 0)
+	if (wstr.empty()) return {};
+	int size_needed = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.size()), nullptr, 0, nullptr, nullptr);
+	std::string str(size_needed, 0);
+	WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), static_cast<int>(wstr.size()), &str[0], size_needed, nullptr, nullptr);
+	return str;
+}
+
+static std::wstring Utf8ToWstring(const std::string& str)
+{
+	if (str.empty()) return {};
+	int size_needed = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.size()), nullptr, 0);
+	std::wstring wstr(size_needed, 0);
+	MultiByteToWideChar(CP_UTF8, 0, str.c_str(), static_cast<int>(str.size()), &wstr[0], size_needed);
+	return wstr;
+}
+
+static std::string LatinizePath(const fs::path& path)
+{
+	if (path.empty()) return {};
+
+	fs::path latinPath;
+	for (auto it = path.begin(); it != path.end(); ++it)
+	{
+		std::wstring partWstr = it->wstring();
+		if (partWstr == L"." || partWstr == L"..")
+		{
+			latinPath /= partWstr;
+		}
+		else
+		{
+			std::string partStr = WstringToUtf8(partWstr);
+			std::string latinPart;
+			for (unsigned char ch : partStr)
+			{
+				if (ch > 0x7f)
+				{
+					latinPart += std::format("{:02x}", ch);
+				}
+				else
+				{
+					latinPart += static_cast<char>(ch);
+				}
+			}
+			latinPath /= fs::path(latinPart);
+		}
+	}
+	return WstringToUtf8(latinPath.wstring());
+}
+
+static std::string Utf8PathToNative(const std::string& path)
+{
+	return WstringToUtf8(fs::path(Utf8ToWstring(path)).wstring());
+}
+
+static void ConvNameToLatin(const char* strName, std::string& strOut)
+{
+	std::wstring wstr = Utf8ToWstring(strName);
+	strOut = WstringToUtf8(wstr);
+}
+
+static std::string LatinizeString(const std::string& input)
+{
+	std::string result;
+	for (unsigned char ch : input)
 	{
 		if (ch > 0x7f)
 		{
-			sprintf_s(strBuf, "%02x", ch);
-			strOut.append(strBuf);
+			result += std::format("{:02x}", ch);
 		}
 		else
-			strOut.push_back(ch);
-		++curr;
+		{
+			result += static_cast<char>(ch);
+		}
 	}
+	return result;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -48,7 +114,7 @@ FbxHelper::FbxHelper()
 
 FbxHelper::~FbxHelper()
 {
-	m_pSdkMgr->Destroy();
+	if (m_pSdkMgr) m_pSdkMgr->Destroy();
 }
 
 void FbxHelper::SetInfo()
@@ -102,13 +168,10 @@ bool FbxHelper::SaveScene(const char * pFileName, bool pEmbedMedia, int pFileFor
 	// Initialize the exporter by providing a filename.
 	if (lExporter->Initialize(pFileName, pFileFormat, m_pSdkMgr->GetIOSettings()) == false)
 	{
-		FBXSDK_printf("Call to FbxExporter::Initialize() failed.\n");
-		FBXSDK_printf("Error returned: %s\n\n", lExporter->GetStatus().GetErrorString());
 		return false;
 	}
 
 	FbxManager::GetFileFormatVersion(lMajor, lMinor, lRevision);
-	FBXSDK_printf("FBX file format version %d.%d.%d\n\n", lMajor, lMinor, lRevision);
 
 	// Export the scene.
 	lStatus = lExporter->Export(m_pScene);
@@ -134,49 +197,55 @@ FbxSurfacePhong * FbxHelper::NewPhong(const char * strName)
 	return FbxSurfacePhong::Create(m_pScene, strName);
 }
 
-static bool CopyFileTo(const char * strFrom, const char * strTo)
+static bool CopyFileTo(const std::string& strFrom, const std::string& strTo)
 {
-	std::wstring strWfrom, strWto;
-	Platform_Utf8To16(strFrom, strWfrom);
-	Platform_Utf8To16(strTo, strWto);
-	strWfrom.push_back(0);
-	strWto.push_back(0);
+	try
+	{
+		fs::path pathFrom = fs::u8path(strFrom);
+		fs::path pathTo = fs::u8path(strTo);
 
-	SHFILEOPSTRUCT fop;
-	fop.hwnd = 0;
-	fop.wFunc = FO_COPY;
-	fop.pFrom = strWfrom.c_str();
-	fop.pTo = strWto.c_str();
-	fop.fFlags = FOF_NOCONFIRMMKDIR | FOF_NOCONFIRMATION;
-	fop.fAnyOperationsAborted = FALSE;
-	fop.hNameMappings = 0;
-	fop.lpszProgressTitle = 0;
-	return SHFileOperation(&fop) == 0;
+		if (fs::exists(pathFrom))
+		{
+			if (pathTo.has_parent_path())
+			{
+				fs::create_directories(pathTo.parent_path());
+			}
+			fs::copy_file(pathFrom, pathTo, fs::copy_options::overwrite_existing);
+			return true;
+		}
+	}
+	catch (...)
+	{
+	}
+	return false;
 }
 
 FbxFileTexture * FbxHelper::NewTexture(const char * strName, const char * strFileName)
 {
-	std::string strLatin, strLatinFileName;
+	std::string finalTexName = strName;
+	std::string finalFileName = strFileName;
+
 	if (g_bLatin)
 	{
-		ConvNameToLatin(strName, strLatin);
-		strName = strLatin.c_str();
+		finalTexName = LatinizeString(strName);
+		
+		fs::path originalPath = fs::u8path(strFileName);
+		finalFileName = LatinizePath(originalPath);
 
-		ConvNameToLatin(strFileName, strLatinFileName);
-		if (strFileName != strLatinFileName)
+		if (finalFileName != strFileName)
 		{
-			if (!CopyFileTo(strFileName, strLatinFileName.c_str()))
+			if (!CopyFileTo(strFileName, finalFileName))
 			{
+				// Attempt fallback if direct copy fails (could be encoding mismatch)
 				std::string strAcpInUtf8;
 				Platform_SJIS2ACP_UTF8(strFileName, strAcpInUtf8);
-				CopyFileTo(strAcpInUtf8.c_str(), strLatinFileName.c_str());
+				CopyFileTo(strAcpInUtf8, finalFileName);
 			}
-			strFileName = strLatinFileName.c_str();
 		}
 	}
 
-	FbxFileTexture * ptr = FbxFileTexture::Create(m_pScene, strName);
-	ptr->SetFileName(strFileName);
+	FbxFileTexture * ptr = FbxFileTexture::Create(m_pScene, finalTexName.c_str());
+	ptr->SetFileName(finalFileName.c_str());
 	ptr->SetTextureUse(FbxTexture::eStandard);
 	ptr->SetMappingType(FbxTexture::eUV);
 	ptr->SetMaterialUse(FbxFileTexture::eModelMaterial);
@@ -314,21 +383,20 @@ void FbxHelper::StoreBindPose(FbxNode * pNode, std::map<FbxNode*, FbxAMatrix> & 
 }
 
 //////////////////////////////////////////////////////////////////////////
-FbxHelper::Shape * FbxHelper::BeginShape(const char * strName)
+std::unique_ptr<FbxHelper::Shape> FbxHelper::BeginShape(const char * strName)
 {
 	if (g_bLatin)
 	{
 		std::string strLatin;
 		ConvNameToLatin(strName, strLatin);
-		return new Shape(this, strLatin.c_str());
+		return std::make_unique<Shape>(this, strLatin.c_str());
 	}
-	return new Shape(this, strName);
+	return std::make_unique<Shape>(this, strName);
 }
 
-void FbxHelper::EndShape(Shape * pShape)
+FbxHelper::Shape::~Shape()
 {
-	StoreBindPose(pShape->m_pNode, pShape->m_BindPoses);
-	delete pShape;
+	m_pOwner->StoreBindPose(m_pNode, m_BindPoses);
 }
 
 FbxHelper::Shape::Shape(FbxHelper * owner, const char * strName)

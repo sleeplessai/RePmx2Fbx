@@ -1,0 +1,61 @@
+{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_INSTALL_PREFIX": "${sourceDir}/install"
+      },
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      }
+    },
+    {
+      "name": "ninja",
+      "displayName": "Ninja Release",
+      "description": "Build with Ninja generator for fast standalone CLI usage",
+      "inherits": "base"
+    },
+    {
+      "name": "vs2022",
+      "displayName": "Visual Studio 2022",
+      "description": "Standard .sln solution for VS 2022",
+      "generator": "Visual Studio 17 2022",
+      "binaryDir": "${sourceDir}/build-vs2022",
+      "architecture": "x64"
+    },
+    {
+      "name": "vs2026-slnx",
+      "displayName": "Visual Studio 2026 (slnx)",
+      "description": "Modern .slnx solution for VS 2026",
+      "generator": "Visual Studio 18 2026",
+      "binaryDir": "${sourceDir}/build-vs2026",
+      "architecture": "x64",
+      "cacheVariables": {
+        "CMAKE_VS_SOLUTION_DESIGNER_FORMAT": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "ninja",
+      "configurePreset": "ninja",
+      "configuration": "Release"
+    },
+    {
+      "name": "vs2022",
+      "configurePreset": "vs2022",
+      "configuration": "Release"
+    },
+    {
+      "name": "vs2026-slnx",
+      "configurePreset": "vs2026-slnx",
+      "configuration": "Release"
+    }
+  ]
+}
